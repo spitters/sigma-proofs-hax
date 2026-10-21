@@ -1,0 +1,31 @@
+[package]
+name = "sigma-proofs-hax"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "A hax-extractable fork of the Σ-protocol core of sigma-proofs 0.4.1"
+repository = "https://github.com/spitters/sigma-proofs-hax"
+readme = "README.md"
+
+[dependencies]
+# Used only by the modules outside the hax view (`cfg(not(hax))`): the
+# Ristretto255 instance of the group operations and the Fiat-Shamir layer.
+curve25519-dalek = { version = "5", default-features = false, features = ["alloc", "group", "precomputed-tables"] }
+spongefish = "0.8"
+
+[dev-dependencies]
+# The unmodified upstream crate, the reference of the differential test.
+sigma-proofs = { version = "=0.4.1", default-features = false, features = ["std", "curve25519-dalek"] }
+# The P-256 and BLS12-381 G1 instances of the group operations, used only by
+# the test-vector suite (`tests/draft_vectors.rs`), and its JSON reader.
+bls12_381 = { version = "0.9", default-features = false, features = ["groups"] }
+ff = { version = "0.14", default-features = false }
+group = "0.14"
+p256 = { version = "0.14", default-features = false, features = ["arithmetic"] }
+serde_json = "1"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(hax)'] }
+
+[profile.dev]
+opt-level = 1
