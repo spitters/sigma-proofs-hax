@@ -19,9 +19,11 @@ Fiat–Shamir transforms secure with concrete bounds.
 - The extracted core is written in the subset of Rust that hax translates. Scalars and group
   elements are 32-byte encodings; every group and field operation is an associated function of
   the trait `SigmaGroup`, including the multi-scalar multiplications `msm` (constant time in the
-  scalars, used by the prover) and `msm_vartime` (public scalars: verifier, simulator, statement
-  image); prover nonces and simulator randomness are inputs; a function returns the updated value
-  where upstream mutates through `&mut`; loops are index loops.
+  scalars, used by the prover), `msm_vartime` (public scalars: the batchable verifier, statement
+  image) and `msm_rows_vartime` (the rows of the simulated commitment, which the verifier of one
+  equation, the compact verifier and the simulator compute, in one call, so that a base shared by
+  several rows is decoded once); prover nonces and simulator randomness are inputs; a function
+  returns the updated value where upstream mutates through `&mut`; loops are index loops.
 - The module `fixed` holds Schnorr and DLEQ provers, simulators and verifiers of fixed shape:
   64-bit limb arrays for scalars and elements, and status words (0 accepts) for verdicts, for
   compilation by a compiler whose front accepts fixed-size arrays of machine words.
@@ -33,7 +35,7 @@ Fiat–Shamir transforms secure with concrete bounds.
 
 ## Tests
 
-`cargo test` runs three suites.
+`cargo test` runs four suites.
 
 - `tests/draft_vectors.rs`: the test vectors of draft-03, Appendix A (SHAKE128 over P-256 and
   BLS12-381 G1, batchable and compact proofs, valid and adversarial instances), and the vectors
@@ -46,6 +48,9 @@ Fiat–Shamir transforms secure with concrete bounds.
   proof strings agree, and so do the verdicts on correct, tampered and truncated proofs; an input
   that only upstream accepts must fail a draft-03 check that upstream does not run.
 - `tests/fixed.rs`: the fixed-shape functions against the generic core on random inputs.
+- `tests/kernels.rs`: `msm_rows_vartime` of ristretto255, P-256 and BLS12-381 G1 against
+  `msm_vartime` row by row and the term-by-term reference, and the ristretto255 `identity`,
+  `generator` and `group_eq`, which compare and return encodings, against the decoded points.
 
 ## What is proved
 

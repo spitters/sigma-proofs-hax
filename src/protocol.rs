@@ -8,9 +8,11 @@
 //!
 //! Each linear combination is one MSM, as upstream: the prover's commitment
 //! in constant time ([`SigmaGroup::msm`], through [`Instance::map`]), the
-//! verifier and the simulator in variable time
-//! ([`SigmaGroup::msm_vartime`]; challenge, response and randomness are
-//! public).
+//! verifier and the simulator in variable time (challenge, response and
+//! randomness are public). The simulated commitment, which the verifier of
+//! one equation and the compact verifier recompute, evaluates its rows by
+//! one call of [`SigmaGroup::msm_rows_vartime`]; the verifier of a batchable
+//! proof of several equations is one [`SigmaGroup::msm_vartime`].
 
 use crate::group::SigmaGroup;
 use crate::types::{
@@ -93,9 +95,10 @@ impl Instance {
 
     /// `SimulateCommitment`: the commitment for which `(challenge, response)`
     /// verifies, `commitment[j] = map(response)[j] - challenge * image[j]`.
-    /// Each entry is one variable-time MSM ([`SigmaGroup::msm_vartime`]): the
-    /// terms of row `j` ([`Instance::evaluation_pairs`]) followed by the term
-    /// `(-challenge, image[j])`.
+    /// Entry `j` is the variable-time MSM of the row `j`: the terms of
+    /// equation `j` ([`Instance::evaluation_pairs`]) followed by the term
+    /// `(-challenge, image[j])`. The rows are evaluated by one call of
+    /// [`SigmaGroup::msm_rows_vartime`].
     pub fn simulate_commitment<C: SigmaGroup>(
         &self,
         challenge: &Scalar,
@@ -105,16 +108,16 @@ impl Instance {
             return Err(VerificationError);
         }
         let negated = C::scalar_neg(challenge);
-        let mut commitment = Vec::new();
+        let mut rows = Vec::new();
         for j in 0..self.equations.len() {
             let (row_scalars, row_bases) = self.evaluation_pairs::<C>(j, response);
             let mut scalars = row_scalars;
             let mut bases = row_bases;
             scalars.push(negated);
             bases.push(self.image[j]);
-            commitment.push(C::msm_vartime(&scalars, &bases));
+            rows.push((scalars, bases));
         }
-        Ok(commitment)
+        Ok(C::msm_rows_vartime(&rows))
     }
 
     /// `Verifier`: checks `map(response) = commitment + challenge * image`.

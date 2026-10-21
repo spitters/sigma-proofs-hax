@@ -11,13 +11,21 @@
 //! that this module produced or that [`decode_scalar`] / [`decode_element`]
 //! accepted.
 //!
+//! Every element has exactly one Ristretto encoding, and decoding accepts
+//! only that one, so `group_eq` compares the encodings, and `identity` and
+//! `generator` are the constant encodings; none of the three decodes or
+//! encodes a point.
+//!
 //! The multi-scalar multiplications are those of `curve25519-dalek`:
 //! constant-time Straus ([`MultiscalarMul`]) for `msm` and variable-time
-//! Straus/Pippenger ([`VartimeMultiscalarMul`]) for `msm_vartime`. A scalar
-//! multiplication of the generator's encoding uses the precomputed basepoint
-//! table.
+//! Straus/Pippenger ([`VartimeMultiscalarMul`]) for `msm_vartime` and for
+//! each row of `msm_rows_vartime`, which decodes each distinct base of its
+//! rows once. A scalar multiplication of the generator's encoding uses the
+//! precomputed basepoint table.
 
-use curve25519_dalek::constants::{RISTRETTO_BASEPOINT_COMPRESSED, RISTRETTO_BASEPOINT_POINT};
+use std::collections::HashMap;
+
+use curve25519_dalek::constants::RISTRETTO_BASEPOINT_COMPRESSED;
 use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
 use curve25519_dalek::scalar::Scalar as DalekScalar;
 use curve25519_dalek::traits::{Identity, MultiscalarMul, VartimeMultiscalarMul};
@@ -113,11 +121,12 @@ impl SigmaGroup for Ristretto255 {
     fn scalar_eq(a: &Scalar, b: &Scalar) -> bool {
         s(a) == s(b)
     }
+    // The encodings of the identity (32 zero bytes) and of the basepoint.
     fn identity() -> Element {
-        encode_element(&RistrettoPoint::identity())
+        CompressedRistretto::identity().0
     }
     fn generator() -> Element {
-        encode_element(&RISTRETTO_BASEPOINT_POINT)
+        RISTRETTO_BASEPOINT_COMPRESSED.0
     }
     fn group_add(a: &Element, b: &Element) -> Element {
         encode_element(&(p(a) + p(b)))
@@ -125,8 +134,9 @@ impl SigmaGroup for Ristretto255 {
     fn group_mul(scalar: &Scalar, point: &Element) -> Element {
         encode_element(&mul_point(&s(scalar), point))
     }
+    // Encodings are canonical: equal elements have equal encodings.
     fn group_eq(a: &Element, b: &Element) -> bool {
-        p(a) == p(b)
+        a == b
     }
     // The dispatch is on the number of terms, which is public: zero terms
     // give the identity, one term is one scalar multiplication (faster than
@@ -147,6 +157,30 @@ impl SigmaGroup for Ristretto255 {
         }
         let (ss, ps) = decode_terms(scalars, bases);
         encode_element(&RistrettoPoint::vartime_multiscalar_mul(&ss, &ps))
+    }
+    // Each row is the MSM of `msm_vartime` on the same decoded terms; the
+    // bases are decoded once per distinct encoding across all rows.
+    fn msm_rows_vartime(rows: &[(Vec<Scalar>, Vec<Element>)]) -> Vec<Element> {
+        let mut slot: HashMap<Element, usize> = HashMap::new();
+        let mut points: Vec<RistrettoPoint> = Vec::new();
+        for (scalars, bases) in rows {
+            for base in &bases[..scalars.len()] {
+                slot.entry(*base).or_insert_with(|| {
+                    points.push(p(base));
+                    points.len() - 1
+                });
+            }
+        }
+        rows.iter()
+            .map(|(scalars, bases)| {
+                if scalars.len() == 0 {
+                    return Self::identity();
+                }
+                let ss: Vec<DalekScalar> = scalars.iter().map(s).collect();
+                let ps = bases[..scalars.len()].iter().map(|b| &points[slot[b]]);
+                encode_element(&RistrettoPoint::vartime_multiscalar_mul(&ss, ps))
+            })
+            .collect()
     }
 }
 

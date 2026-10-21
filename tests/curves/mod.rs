@@ -173,6 +173,9 @@ impl<C: Curve> SigmaGroup for Interned<C> {
     fn msm_vartime(scalars: &[Scalar], bases: &[Element]) -> Element {
         sigma_proofs_hax::msm::msm_reference::<Self>(scalars, bases)
     }
+    fn msm_rows_vartime(rows: &[(Vec<Scalar>, Vec<Element>)]) -> Vec<Element> {
+        sigma_proofs_hax::msm::msm_rows_reference::<Self>(rows)
+    }
 }
 
 impl<C: Curve> GroupWire for Interned<C> {
